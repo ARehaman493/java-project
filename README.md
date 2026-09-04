@@ -1,4 +1,4 @@
-# Sample Java Web App - own by TM
+# Sample Java Web App - own by TM and AR.
 
 A small Spring Boot + Maven web application using Java, HTML, and CSS.
 
