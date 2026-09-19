@@ -8,10 +8,12 @@ pipeline {
         timestamps()
     }
 
+    // GitHub webhook trigger
     triggers {
         githubPush()
     }
 
+    // Jenkins configured tools
     tools {
         jdk 'JDK-17'
         maven 'mymaven'
@@ -38,10 +40,11 @@ pipeline {
         JF = '/var/lib/jenkins/tools/io.jenkins.plugins.jfrog.JfrogInstallation/jfrog-cli/jf'
     }
 
+
     stages {
 
         // =====================================================
-        // 1. Checkout
+        // 1. CHECKOUT
         // =====================================================
 
         stage('Checkout') {
@@ -56,7 +59,7 @@ pipeline {
 
 
         // =====================================================
-        // 2. Verify Jenkins Tools
+        // 2. VERIFY TOOLS
         // =====================================================
 
         stage('Verify Tools') {
@@ -121,7 +124,7 @@ pipeline {
 
 
         // =====================================================
-        // 3. Maven Build
+        // 3. MAVEN BUILD
         // =====================================================
 
         stage('Build') {
@@ -140,7 +143,7 @@ pipeline {
 
 
         // =====================================================
-        // 4. Get Version from pom.xml
+        // 4. GET VERSION FROM POM.XML
         // =====================================================
 
         stage('Get Version') {
@@ -159,9 +162,11 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
+
                     if (!env.VERSION) {
                         error('Unable to read project version from pom.xml')
                     }
+
 
                     echo "======================================"
                     echo "Application Version = ${env.VERSION}"
@@ -172,7 +177,7 @@ pipeline {
 
 
         // =====================================================
-        // 5. Upload Artifact to JFrog
+        // 5. UPLOAD JAR TO JFROG
         // =====================================================
 
         stage('Publish to JFrog') {
@@ -204,7 +209,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Upload to JFrog"
+                        echo "Upload Artifact to JFrog"
                         echo "======================================"
 
                         "${JF}" rt u \
@@ -215,15 +220,17 @@ pipeline {
                           --access-token="${JFROG_TOKEN}"
 
 
-                        echo "JFrog upload completed."
-                '''
+                        echo "======================================"
+                        echo "JFrog Upload Completed"
+                        echo "======================================"
+                    '''
                 }
             }
         }
 
 
         // =====================================================
-        // 6. Download Artifact from JFrog
+        // 6. DOWNLOAD JAR FROM JFROG
         // =====================================================
 
         stage('Retrieve Artifact') {
@@ -244,7 +251,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Remove Old Download"
+                        echo "Remove Previous Download"
                         echo "======================================"
 
                         rm -f \
@@ -253,7 +260,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Download from JFrog"
+                        echo "Download Artifact from JFrog"
                         echo "======================================"
 
                         "${JF}" rt dl \
@@ -285,14 +292,14 @@ pipeline {
                         test -f app.jar
 
                         ls -lh app.jar
-                '''
+                    '''
                 }
             }
         }
 
 
         // =====================================================
-        // 7. Build Docker Image
+        // 7. BUILD DOCKER IMAGE
         // =====================================================
 
         stage('Build Docker Image') {
@@ -340,7 +347,7 @@ pipeline {
 
 
         // =====================================================
-        // 8. Push Docker Image to ACR
+        // 8. PUSH DOCKER IMAGE TO ACR
         // =====================================================
 
         stage('Push to ACR') {
@@ -398,7 +405,7 @@ pipeline {
 
 
         // =====================================================
-        // 9. Deploy to Docker VM
+        // 9. DEPLOY TO DOCKER VM
         // =====================================================
 
         stage('Deploy') {
@@ -411,7 +418,7 @@ pipeline {
                     set -e
 
 
-                    az vm run-command invoke \
+                    DEPLOY_OUTPUT=$(az vm run-command invoke \
                       --resource-group "${RESOURCE_GROUP}" \
                       --name "${DEPLOY_VM}" \
                       --command-id RunShellScript \
@@ -482,14 +489,32 @@ pipeline {
                         docker inspect \
                           ${APP_NAME} \
                           --format='{{.Config.Image}}'
-                      "
+
+
+                        echo 'DEPLOY_OK'
+
+                      " \
+                      --query "value[0].message" \
+                      --output tsv)
+
+
+                    echo "${DEPLOY_OUTPUT}"
+
+
+                    echo "${DEPLOY_OUTPUT}" \
+                      | grep -q "DEPLOY_OK"
+
+
+                    echo "======================================"
+                    echo "Deployment Command Successful"
+                    echo "======================================"
                 '''
             }
         }
 
 
         // =====================================================
-        // 10. Verify Deployment
+        // 10. VERIFY DEPLOYMENT
         // =====================================================
 
         stage('Verify Deployment') {
@@ -502,7 +527,7 @@ pipeline {
                     set -e
 
 
-                    az vm run-command invoke \
+                    VERIFY_OUTPUT=$(az vm run-command invoke \
                       --resource-group "${RESOURCE_GROUP}" \
                       --name "${DEPLOY_VM}" \
                       --command-id RunShellScript \
@@ -519,30 +544,16 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Verify Container Running'
+                        echo 'Verify Container is Running'
                         echo '======================================'
 
-                        RUNNING=\\$(docker inspect \
+                        docker inspect \
                           --format='{{.State.Running}}' \
-                          ${APP_NAME})
+                          ${APP_NAME} \
+                          | grep -qx true
 
 
-                        echo \"Container Running: \\${RUNNING}\"
-
-
-                        if [ \"\\${RUNNING}\" != 'true' ]
-                        then
-
-                            echo 'Container is not running.'
-
-                            echo '===== Container Logs ====='
-
-                            docker logs \
-                              --tail 100 \
-                              ${APP_NAME} || true
-
-                            exit 1
-                        fi
+                        echo 'Container is running.'
 
 
                         echo '======================================'
@@ -554,7 +565,7 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Running Image'
+                        echo 'Running Docker Image'
                         echo '======================================'
 
                         docker inspect \
@@ -563,7 +574,21 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Application HTTP Check'
+                        echo 'Verify Correct Image Version'
+                        echo '======================================'
+
+                        docker inspect \
+                          ${APP_NAME} \
+                          --format='{{.Config.Image}}' \
+                          | grep -Fx \
+                          '${ACR_SERVER}/${APP_NAME}:${VERSION}'
+
+
+                        echo 'Correct Docker image is running.'
+
+
+                        echo '======================================'
+                        echo 'Application HTTP Health Check'
                         echo '======================================'
 
                         curl \
@@ -578,8 +603,30 @@ pipeline {
                           >/dev/null
 
 
-                        echo 'Application is responding successfully.'
-                      "
+                        echo 'Application is responding on port 8080.'
+
+
+                        echo '======================================'
+                        echo 'Verification Successful'
+                        echo '======================================'
+
+                        echo 'VERIFY_OK'
+
+                      " \
+                      --query "value[0].message" \
+                      --output tsv)
+
+
+                    echo "${VERIFY_OUTPUT}"
+
+
+                    echo "${VERIFY_OUTPUT}" \
+                      | grep -q "VERIFY_OK"
+
+
+                    echo "======================================"
+                    echo "Deployment Verification Successful"
+                    echo "======================================"
                 '''
             }
         }
@@ -587,7 +634,7 @@ pipeline {
 
 
     // =========================================================
-    // Pipeline Result
+    // PIPELINE RESULT
     // =========================================================
 
     post {
@@ -610,6 +657,9 @@ ${env.ACR_SERVER}/${env.APP_NAME}:${env.VERSION}
 
 Docker VM:
 ${env.DEPLOY_VM}
+
+Application Port:
+8080
 
 Status:
 SUCCESS
