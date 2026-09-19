@@ -3,10 +3,10 @@ pipeline {
     agent any
 
     options {
-        // We are doing checkout manually in the Checkout stage
+        // Checkout is handled manually in the Checkout stage
         skipDefaultCheckout(true)
 
-        // Avoid two deployments running at the same time
+        // Prevent multiple deployments at the same time
         disableConcurrentBuilds()
 
         // Add timestamps to Jenkins logs
@@ -20,6 +20,7 @@ pipeline {
 
     tools {
         maven 'mymaven'
+        jdk 'jdk17'
     }
 
     environment {
@@ -61,7 +62,36 @@ pipeline {
 
 
         // =========================================================
-        // 2. Maven Build
+        // 2. Verify Java / Maven
+        // =========================================================
+
+        stage('Verify Tools') {
+
+            steps {
+
+                echo '===== Verify Java and Maven ====='
+
+                sh '''
+                    set -e
+
+                    echo "===== JAVA_HOME ====="
+                    echo "${JAVA_HOME}"
+
+                    echo "===== Java Version ====="
+                    java -version
+
+                    echo "===== Javac Version ====="
+                    javac -version
+
+                    echo "===== Maven Version ====="
+                    mvn -version
+                '''
+            }
+        }
+
+
+        // =========================================================
+        // 3. Maven Build
         // =========================================================
 
         stage('Build') {
@@ -80,7 +110,7 @@ pipeline {
 
 
         // =========================================================
-        // 3. Get Version from pom.xml
+        // 4. Get Version from pom.xml
         // =========================================================
 
         stage('Get Version') {
@@ -102,7 +132,6 @@ pipeline {
 
                     ).trim()
 
-
                     echo "Application Version = ${env.VERSION}"
                 }
             }
@@ -110,7 +139,7 @@ pipeline {
 
 
         // =========================================================
-        // 4. Upload JAR to JFrog
+        // 5. Upload JAR to JFrog
         // =========================================================
 
         stage('Publish to JFrog') {
@@ -151,7 +180,7 @@ pipeline {
 
 
         // =========================================================
-        // 5. Download JAR from JFrog
+        // 6. Download JAR from JFrog
         // =========================================================
 
         stage('Retrieve Artifact') {
@@ -212,7 +241,7 @@ pipeline {
 
 
         // =========================================================
-        // 6. Build Docker Image
+        // 7. Build Docker Image
         // =========================================================
 
         stage('Build Docker Image') {
@@ -244,7 +273,7 @@ pipeline {
 
 
         // =========================================================
-        // 7. Push Docker Image to ACR
+        // 8. Push Docker Image to ACR
         // =========================================================
 
         stage('Push to ACR') {
@@ -293,7 +322,7 @@ pipeline {
 
 
         // =========================================================
-        // 8. Deploy to Docker VM
+        // 9. Deploy to Docker VM
         // =========================================================
 
         stage('Deploy') {
@@ -384,7 +413,7 @@ pipeline {
 
 
         // =========================================================
-        // 9. Verify Deployment
+        // 10. Verify Deployment
         // =========================================================
 
         stage('Verify Deployment') {
