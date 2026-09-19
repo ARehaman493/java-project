@@ -3,24 +3,18 @@ pipeline {
     agent any
 
     options {
-        // Checkout will be handled manually
         skipDefaultCheckout(true)
-
-        // Prevent multiple deployments at the same time
         disableConcurrentBuilds()
-
-        // Add timestamps to console logs
         timestamps()
     }
 
-    // Trigger pipeline from GitHub webhook
     triggers {
         githubPush()
     }
 
     tools {
-        maven 'mymaven'
         jdk 'JDK-17'
+        maven 'mymaven'
     }
 
     environment {
@@ -34,8 +28,9 @@ pipeline {
 
         // JFrog
         JFROG_URL = 'http://20.88.47.132:8082/artifactory'
+        JFROG_REPO = 'maven-local'
 
-        // Azure deployment VM
+        // Azure Deployment VM
         RESOURCE_GROUP = 'teja-rg'
         DEPLOY_VM      = 'docker-vm'
 
@@ -43,12 +38,11 @@ pipeline {
         JF = '/var/lib/jenkins/tools/io.jenkins.plugins.jfrog.JfrogInstallation/jfrog-cli/jf'
     }
 
-
     stages {
 
-        // =========================================================
-        // 1. Checkout Source Code
-        // =========================================================
+        // =====================================================
+        // 1. Checkout
+        // =====================================================
 
         stage('Checkout') {
 
@@ -61,38 +55,74 @@ pipeline {
         }
 
 
-        // =========================================================
-        // 2. Verify Java / Maven
-        // =========================================================
+        // =====================================================
+        // 2. Verify Required Tools
+        // =====================================================
 
         stage('Verify Tools') {
 
             steps {
 
-                echo '===== Verify Java and Maven ====='
-
                 sh '''
                     set -e
 
-                    echo "===== JAVA_HOME ====="
+                    echo "======================================"
+                    echo "JAVA_HOME"
+                    echo "======================================"
+
                     echo "${JAVA_HOME}"
 
-                    echo "===== Java Version ====="
+
+                    echo "======================================"
+                    echo "Java Version"
+                    echo "======================================"
+
                     java -version
 
-                    echo "===== Javac Version ====="
+
+                    echo "======================================"
+                    echo "Java Compiler Version"
+                    echo "======================================"
+
                     javac -version
 
-                    echo "===== Maven Version ====="
+
+                    echo "======================================"
+                    echo "Maven Version"
+                    echo "======================================"
+
                     mvn -version
+
+
+                    echo "======================================"
+                    echo "Docker Version"
+                    echo "======================================"
+
+                    docker --version
+
+
+                    echo "======================================"
+                    echo "Azure CLI Version"
+                    echo "======================================"
+
+                    az version
+
+
+                    echo "======================================"
+                    echo "JFrog CLI"
+                    echo "======================================"
+
+                    test -x "${JF}"
+
+                    "${JF}" --version
                 '''
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 3. Maven Build
-        // =========================================================
+        // =====================================================
 
         stage('Build') {
 
@@ -109,9 +139,9 @@ pipeline {
         }
 
 
-        // =========================================================
-        // 4. Get Application Version from pom.xml
-        // =========================================================
+        // =====================================================
+        // 4. Get Version Dynamically
+        // =====================================================
 
         stage('Get Version') {
 
@@ -129,21 +159,27 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
+
+                    if (!env.VERSION) {
+                        error('Unable to read version from pom.xml')
+                    }
+
+
+                    echo "======================================"
                     echo "Application Version = ${env.VERSION}"
+                    echo "======================================"
                 }
             }
         }
 
 
-        // =========================================================
-        // 5. Upload JAR to JFrog
-        // =========================================================
+        // =====================================================
+        // 5. Publish JAR to JFrog
+        // =====================================================
 
         stage('Publish to JFrog') {
 
             steps {
-
-                echo '===== Upload Artifact to JFrog ====='
 
                 withCredentials([
                     string(
@@ -155,33 +191,44 @@ pipeline {
                     sh '''
                         set -e
 
-                        echo "Artifact:"
-                        echo "target/${APP_NAME}-${VERSION}.jar"
+                        ARTIFACT="target/${APP_NAME}-${VERSION}.jar"
 
-                        test -f \
-                          "target/${APP_NAME}-${VERSION}.jar"
 
-                        ${JF} rt u \
-                          "target/${APP_NAME}-${VERSION}.jar" \
-                          "maven-local/" \
+                        echo "======================================"
+                        echo "Verify Maven Artifact"
+                        echo "======================================"
+
+                        test -f "${ARTIFACT}"
+
+                        ls -lh "${ARTIFACT}"
+
+
+                        echo "======================================"
+                        echo "Upload Artifact to JFrog"
+                        echo "======================================"
+
+                        "${JF}" rt u \
+                          "${ARTIFACT}" \
+                          "${JFROG_REPO}/" \
                           --flat=true \
                           --url="${JFROG_URL}" \
                           --access-token="${JFROG_TOKEN}"
+
+
+                        echo "JFrog upload completed."
                     '''
                 }
             }
         }
 
 
-        // =========================================================
-        // 6. Download JAR from JFrog
-        // =========================================================
+        // =====================================================
+        // 6. Retrieve JAR from JFrog
+        // =====================================================
 
         stage('Retrieve Artifact') {
 
             steps {
-
-                echo '===== Download Artifact from JFrog ====='
 
                 withCredentials([
                     string(
@@ -193,37 +240,45 @@ pipeline {
                     sh '''
                         set -e
 
-                        echo "===== Cleanup Previous Download ====="
+
+                        echo "======================================"
+                        echo "Cleanup Old Download"
+                        echo "======================================"
 
                         rm -f \
                           "${APP_NAME}-${VERSION}.jar" \
                           app.jar
 
 
-                        echo "===== Download from JFrog ====="
+                        echo "======================================"
+                        echo "Download Artifact from JFrog"
+                        echo "======================================"
 
-                        ${JF} rt dl \
-                          "maven-local/${APP_NAME}-${VERSION}.jar" \
+                        "${JF}" rt dl \
+                          "${JFROG_REPO}/${APP_NAME}-${VERSION}.jar" \
                           "./" \
                           --flat=true \
                           --url="${JFROG_URL}" \
                           --access-token="${JFROG_TOKEN}"
 
 
-                        echo "===== Verify Download ====="
+                        echo "======================================"
+                        echo "Verify Download"
+                        echo "======================================"
 
-                        test -f \
-                          "${APP_NAME}-${VERSION}.jar"
+                        test -f "${APP_NAME}-${VERSION}.jar"
 
-                        ls -lh \
-                          "${APP_NAME}-${VERSION}.jar"
+                        ls -lh "${APP_NAME}-${VERSION}.jar"
 
 
-                        echo "===== Prepare JAR for Docker ====="
+                        echo "======================================"
+                        echo "Prepare app.jar"
+                        echo "======================================"
 
                         cp \
                           "${APP_NAME}-${VERSION}.jar" \
                           app.jar
+
 
                         test -f app.jar
 
@@ -234,27 +289,43 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 7. Build Docker Image
-        // =========================================================
+        // =====================================================
 
         stage('Build Docker Image') {
 
             steps {
 
-                echo '===== Build Docker Image ====='
-
                 sh '''
                     set -e
 
+
+                    echo "======================================"
+                    echo "Verify Docker Inputs"
+                    echo "======================================"
+
                     test -f Dockerfile
                     test -f app.jar
+
+
+                    echo "======================================"
+                    echo "Build Docker Image"
+                    echo "======================================"
 
                     docker build \
                       -t "${APP_NAME}:${VERSION}" \
                       .
 
-                    echo "===== Docker Image Created ====="
+
+                    echo "======================================"
+                    echo "Verify Docker Image"
+                    echo "======================================"
+
+                    docker image inspect \
+                      "${APP_NAME}:${VERSION}" \
+                      >/dev/null
+
 
                     docker images \
                       | grep "${APP_NAME}" \
@@ -264,67 +335,75 @@ pipeline {
         }
 
 
-        // =========================================================
-        // 8. Push Docker Image to Azure Container Registry
-        // =========================================================
+        // =====================================================
+        // 8. Push Image to Azure Container Registry
+        // =====================================================
 
         stage('Push to ACR') {
 
             steps {
 
-                echo '===== Push Docker Image to ACR ====='
-
                 sh '''
                     set -e
 
 
-                    echo "===== Jenkins Azure Login ====="
+                    echo "======================================"
+                    echo "Jenkins Azure Managed Identity Login"
+                    echo "======================================"
 
                     az login \
                       --identity \
                       --output none
 
 
-                    echo "===== ACR Login ====="
+                    echo "======================================"
+                    echo "ACR Login"
+                    echo "======================================"
 
                     az acr login \
                       --name "${ACR_NAME}"
 
 
-                    echo "===== Tag Docker Image ====="
+                    echo "======================================"
+                    echo "Tag Docker Image"
+                    echo "======================================"
 
                     docker tag \
                       "${APP_NAME}:${VERSION}" \
                       "${ACR_SERVER}/${APP_NAME}:${VERSION}"
 
 
-                    echo "===== Push Docker Image ====="
+                    echo "======================================"
+                    echo "Push Docker Image"
+                    echo "======================================"
 
                     docker push \
                       "${ACR_SERVER}/${APP_NAME}:${VERSION}"
 
 
-                    echo "===== ACR Push Completed ====="
+                    echo "======================================"
+                    echo "ACR Push Completed"
+                    echo "======================================"
 
-                    echo \
-                      "${ACR_SERVER}/${APP_NAME}:${VERSION}"
+                    echo "${ACR_SERVER}/${APP_NAME}:${VERSION}"
                 '''
             }
         }
 
 
-        // =========================================================
+        // =====================================================
         // 9. Deploy to Docker VM
-        // =========================================================
+        // =====================================================
 
         stage('Deploy') {
 
             steps {
 
-                echo "===== Deploy ${env.VERSION} to Docker VM ====="
+                echo "===== Deploy Version ${env.VERSION} ====="
 
                 sh '''
                     set -e
+
 
                     az vm run-command invoke \
                       --resource-group "${RESOURCE_GROUP}" \
@@ -335,44 +414,44 @@ pipeline {
                         set -e
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Docker VM Azure Login'
-                        echo '================================='
+                        echo '======================================'
 
                         az login \
                           --identity \
                           --output none
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Docker VM ACR Login'
-                        echo '================================='
+                        echo '======================================'
 
                         az acr login \
                           --name ${ACR_NAME}
 
 
-                        echo '================================='
-                        echo 'Pull New Docker Image'
-                        echo '================================='
+                        echo '======================================'
+                        echo 'Pull New Image'
+                        echo '======================================'
 
                         docker pull \
                           ${ACR_SERVER}/${APP_NAME}:${VERSION}
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Remove Existing Container'
-                        echo '================================='
+                        echo '======================================'
 
                         docker rm \
                           -f \
                           ${APP_NAME} \
-                          || true
+                          2>/dev/null || true
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Start New Container'
-                        echo '================================='
+                        echo '======================================'
 
                         docker run \
                           -d \
@@ -382,17 +461,17 @@ pipeline {
                           ${ACR_SERVER}/${APP_NAME}:${VERSION}
 
 
-                        echo '================================='
-                        echo 'Container Status'
-                        echo '================================='
+                        echo '======================================'
+                        echo 'Container Created'
+                        echo '======================================'
 
                         docker ps \
                           --filter name=${APP_NAME}
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Deployed Image'
-                        echo '================================='
+                        echo '======================================'
 
                         docker inspect \
                           ${APP_NAME} \
@@ -403,18 +482,17 @@ pipeline {
         }
 
 
-        // =========================================================
+        // =====================================================
         // 10. Verify Deployment
-        // =========================================================
+        // =====================================================
 
         stage('Verify Deployment') {
 
             steps {
 
-                echo '===== Verify Application ====='
-
                 sh '''
                     set -e
+
 
                     az vm run-command invoke \
                       --resource-group "${RESOURCE_GROUP}" \
@@ -425,33 +503,71 @@ pipeline {
                         set -e
 
 
-                        echo '================================='
+                        echo '======================================'
+                        echo 'Wait for Application Startup'
+                        echo '======================================'
+
+                        sleep 8
+
+
+                        echo '======================================'
+                        echo 'Verify Container is Running'
+                        echo '======================================'
+
+                        RUNNING=\\$(docker inspect \
+                          --format='{{.State.Running}}' \
+                          ${APP_NAME})
+
+
+                        echo \"Container Running: \\${RUNNING}\"
+
+
+                        if [ \"\\${RUNNING}\" != 'true' ]
+                        then
+
+                            echo 'Container is not running.'
+
+                            docker logs \
+                              --tail 100 \
+                              ${APP_NAME} || true
+
+                            exit 1
+                        fi
+
+
+                        echo '======================================'
                         echo 'Running Container'
-                        echo '================================='
+                        echo '======================================'
 
                         docker ps \
                           --filter name=${APP_NAME}
 
 
-                        echo '================================='
+                        echo '======================================'
                         echo 'Running Image'
-                        echo '================================='
+                        echo '======================================'
 
                         docker inspect \
                           ${APP_NAME} \
                           --format='{{.Config.Image}}'
 
 
-                        echo '================================='
-                        echo 'Application Health Check'
-                        echo '================================='
+                        echo '======================================'
+                        echo 'HTTP Connectivity Check'
+                        echo '======================================'
 
                         curl \
-                          --fail \
+                          --silent \
+                          --show-error \
                           --retry 10 \
                           --retry-connrefused \
                           --retry-delay 3 \
-                          http://localhost:8080
+                          --max-time 10 \
+                          http://localhost:8080 \
+                          >/dev/null
+
+
+                        echo 'Application is responding on port 8080.'
                       "
                 '''
             }
@@ -459,9 +575,9 @@ pipeline {
     }
 
 
-    // =============================================================
+    // =========================================================
     // Pipeline Result
-    // =============================================================
+    // =========================================================
 
     post {
 
@@ -469,7 +585,7 @@ pipeline {
 
             echo """
 ====================================================
-DEPLOYMENT SUCCESSFUL
+PIPELINE SUCCESS
 ====================================================
 
 Application : ${env.APP_NAME}
@@ -478,8 +594,11 @@ Version     : ${env.VERSION}
 Docker Image:
 ${env.ACR_SERVER}/${env.APP_NAME}:${env.VERSION}
 
-Docker VM:
+Deployment VM:
 ${env.DEPLOY_VM}
+
+Status:
+SUCCESS
 
 ====================================================
 """
@@ -493,8 +612,7 @@ ${env.DEPLOY_VM}
 PIPELINE FAILED
 ====================================================
 
-Check the failed Jenkins stage
-and Jenkins console output.
+Check the failed stage in Jenkins Console Output.
 
 ====================================================
 """
