@@ -1,25 +1,188 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>My Java Web App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Abdul Rehaman Shaik | DevOps Portal</title>
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-    <div class="container">
-        <h1>Welcome to My Java Web Application</h1>
-        <p>This webpage is running using Java and Spring Boot.</p>
+    <nav class="navbar">
+        <div class="logo">
+            ARS DevOps Portal
+        </div>
 
-        <button onclick="showMessage()">Click Me</button>
+        <div class="status">
+            ● Application Running
+        </div>
+    </nav>
+
+
+    <section class="hero">
+
+        <div class="hero-badge">
+            Java • Spring Boot • Azure • Jenkins • Docker
+        </div>
+
+        <h1>
+            Welcome to
+            <span>Abdul Rehaman Shaik</span>
+            Portal
+        </h1>
+
+        <p class="subtitle">
+            This Java Spring Boot application is automatically built,
+            packaged, containerized, and deployed using a complete
+            CI/CD pipeline powered by Jenkins and Microsoft Azure.
+        </p>
+
+        <div class="button-group">
+            <button onclick="showMessage()">
+                Test Application
+            </button>
+        </div>
 
         <p id="message"></p>
-    </div>
+
+    </section>
+
+
+    <section class="section">
+
+        <div class="section-title">
+            <h2>Technology Stack</h2>
+
+            <p>
+                Technologies used in this end-to-end DevOps CI/CD lab
+            </p>
+        </div>
+
+
+        <div class="cards">
+
+            <div class="card">
+                <div class="card-icon">⚙️</div>
+
+                <h3>Jenkins</h3>
+
+                <p>
+                    Jenkins automatically starts the CI/CD pipeline
+                    whenever new changes are pushed to GitHub.
+                </p>
+            </div>
+
+
+            <div class="card">
+                <div class="card-icon">📦</div>
+
+                <h3>JFrog Artifactory</h3>
+
+                <p>
+                    Maven artifacts are stored and retrieved from
+                    JFrog Artifactory during the pipeline.
+                </p>
+            </div>
+
+
+            <div class="card">
+                <div class="card-icon">🐳</div>
+
+                <h3>Docker</h3>
+
+                <p>
+                    The Spring Boot application is packaged into
+                    a Docker image using a Java 17 runtime.
+                </p>
+            </div>
+
+
+            <div class="card">
+                <div class="card-icon">☁️</div>
+
+                <h3>Azure Container Registry</h3>
+
+                <p>
+                    Versioned Docker images are pushed securely
+                    to Azure Container Registry.
+                </p>
+            </div>
+
+
+            <div class="card">
+                <div class="card-icon">🚀</div>
+
+                <h3>Automated Deployment</h3>
+
+                <p>
+                    Jenkins remotely deploys the new image to
+                    the Azure Docker VM automatically.
+                </p>
+            </div>
+
+
+            <div class="card">
+                <div class="card-icon">🔐</div>
+
+                <h3>Managed Identity</h3>
+
+                <p>
+                    Azure Managed Identity provides secure authentication
+                    between Jenkins, ACR, and the deployment VM.
+                </p>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="pipeline">
+
+        <h2>CI/CD Pipeline Flow</h2>
+
+        <div class="pipeline-flow">
+
+            <span class="pipeline-item">GitHub</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">Jenkins</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">Maven</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">JFrog</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">Docker</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">Azure ACR</span>
+            <span class="arrow">→</span>
+
+            <span class="pipeline-item">Docker VM</span>
+
+        </div>
+
+    </section>
+
+
+    <footer>
+        Developed by
+        <strong>Abdul Rehaman Shaik</strong>
+        • Azure Cloud DevOps / Platform Engineer
+    </footer>
+
 
     <script>
         function showMessage() {
+
             document.getElementById("message").innerHTML =
-                "Hello! Your Java web application is working.";
+                "✓ Application is running successfully through the CI/CD pipeline!";
         }
     </script>
 
