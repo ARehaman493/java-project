@@ -27,10 +27,10 @@ pipeline {
         ACR_SERVER = 'acrteja23.azurecr.io'
 
         // JFrog
-        JFROG_URL = 'http://20.88.47.132:8082/artifactory'
+        JFROG_URL  = 'http://20.88.47.132:8082/artifactory'
         JFROG_REPO = 'maven-local'
 
-        // Azure Deployment VM
+        // Azure deployment VM
         RESOURCE_GROUP = 'teja-rg'
         DEPLOY_VM      = 'docker-vm'
 
@@ -56,7 +56,7 @@ pipeline {
 
 
         // =====================================================
-        // 2. Verify Required Tools
+        // 2. Verify Jenkins Tools
         // =====================================================
 
         stage('Verify Tools') {
@@ -81,7 +81,7 @@ pipeline {
 
 
                     echo "======================================"
-                    echo "Java Compiler Version"
+                    echo "Javac Version"
                     echo "======================================"
 
                     javac -version
@@ -105,11 +105,11 @@ pipeline {
                     echo "Azure CLI Version"
                     echo "======================================"
 
-                    az version
+                    az --version
 
 
                     echo "======================================"
-                    echo "JFrog CLI"
+                    echo "JFrog CLI Version"
                     echo "======================================"
 
                     test -x "${JF}"
@@ -140,7 +140,7 @@ pipeline {
 
 
         // =====================================================
-        // 4. Get Version Dynamically
+        // 4. Get Version from pom.xml
         // =====================================================
 
         stage('Get Version') {
@@ -159,11 +159,9 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-
                     if (!env.VERSION) {
-                        error('Unable to read version from pom.xml')
+                        error('Unable to read project version from pom.xml')
                     }
-
 
                     echo "======================================"
                     echo "Application Version = ${env.VERSION}"
@@ -174,12 +172,14 @@ pipeline {
 
 
         // =====================================================
-        // 5. Publish JAR to JFrog
+        // 5. Upload Artifact to JFrog
         // =====================================================
 
         stage('Publish to JFrog') {
 
             steps {
+
+                echo '===== Upload Artifact to JFrog ====='
 
                 withCredentials([
                     string(
@@ -204,7 +204,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Upload Artifact to JFrog"
+                        echo "Upload to JFrog"
                         echo "======================================"
 
                         "${JF}" rt u \
@@ -216,19 +216,21 @@ pipeline {
 
 
                         echo "JFrog upload completed."
-                    '''
+                '''
                 }
             }
         }
 
 
         // =====================================================
-        // 6. Retrieve JAR from JFrog
+        // 6. Download Artifact from JFrog
         // =====================================================
 
         stage('Retrieve Artifact') {
 
             steps {
+
+                echo '===== Download Artifact from JFrog ====='
 
                 withCredentials([
                     string(
@@ -242,7 +244,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Cleanup Old Download"
+                        echo "Remove Old Download"
                         echo "======================================"
 
                         rm -f \
@@ -251,7 +253,7 @@ pipeline {
 
 
                         echo "======================================"
-                        echo "Download Artifact from JFrog"
+                        echo "Download from JFrog"
                         echo "======================================"
 
                         "${JF}" rt dl \
@@ -283,7 +285,7 @@ pipeline {
                         test -f app.jar
 
                         ls -lh app.jar
-                    '''
+                '''
                 }
             }
         }
@@ -296,6 +298,8 @@ pipeline {
         stage('Build Docker Image') {
 
             steps {
+
+                echo '===== Build Docker Image ====='
 
                 sh '''
                     set -e
@@ -336,12 +340,14 @@ pipeline {
 
 
         // =====================================================
-        // 8. Push Image to Azure Container Registry
+        // 8. Push Docker Image to ACR
         // =====================================================
 
         stage('Push to ACR') {
 
             steps {
+
+                echo '===== Push Image to ACR ====='
 
                 sh '''
                     set -e
@@ -432,7 +438,7 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Pull New Image'
+                        echo 'Pull New Docker Image'
                         echo '======================================'
 
                         docker pull \
@@ -462,7 +468,7 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Container Created'
+                        echo 'Container Status'
                         echo '======================================'
 
                         docker ps \
@@ -470,7 +476,7 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Deployed Image'
+                        echo 'Deployed Docker Image'
                         echo '======================================'
 
                         docker inspect \
@@ -489,6 +495,8 @@ pipeline {
         stage('Verify Deployment') {
 
             steps {
+
+                echo '===== Verify Application Deployment ====='
 
                 sh '''
                     set -e
@@ -511,7 +519,7 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'Verify Container is Running'
+                        echo 'Verify Container Running'
                         echo '======================================'
 
                         RUNNING=\\$(docker inspect \
@@ -526,6 +534,8 @@ pipeline {
                         then
 
                             echo 'Container is not running.'
+
+                            echo '===== Container Logs ====='
 
                             docker logs \
                               --tail 100 \
@@ -553,10 +563,11 @@ pipeline {
 
 
                         echo '======================================'
-                        echo 'HTTP Connectivity Check'
+                        echo 'Application HTTP Check'
                         echo '======================================'
 
                         curl \
+                          --fail \
                           --silent \
                           --show-error \
                           --retry 10 \
@@ -567,7 +578,7 @@ pipeline {
                           >/dev/null
 
 
-                        echo 'Application is responding on port 8080.'
+                        echo 'Application is responding successfully.'
                       "
                 '''
             }
@@ -588,13 +599,16 @@ pipeline {
 PIPELINE SUCCESS
 ====================================================
 
-Application : ${env.APP_NAME}
-Version     : ${env.VERSION}
+Application:
+${env.APP_NAME}
+
+Version:
+${env.VERSION}
 
 Docker Image:
 ${env.ACR_SERVER}/${env.APP_NAME}:${env.VERSION}
 
-Deployment VM:
+Docker VM:
 ${env.DEPLOY_VM}
 
 Status:
@@ -612,7 +626,8 @@ SUCCESS
 PIPELINE FAILED
 ====================================================
 
-Check the failed stage in Jenkins Console Output.
+Check the failed Jenkins stage
+and Jenkins Console Output.
 
 ====================================================
 """
