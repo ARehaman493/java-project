@@ -16,4 +16,6 @@ mvn spring-boot:run
 
 Then open:
 
+version: 1.0.2
+
 http://localhost:8080
